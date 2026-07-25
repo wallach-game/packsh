@@ -2,6 +2,8 @@ bashpack_usage() {
   cat <<EOF
 Usage: bashpack -l <path/to/repo>   Install a package from a local directory
        bashpack -t <path/to/repo>   Build and run that package's test suite
+       bashpack --single-bundle <path/to/repo>
+                                   Build, and also emit a single runnable .sh
        bashpack -u <name>          Uninstall a previously installed package
        bashpack --list             List installed packages
        bashpack -v, --version      Show version
@@ -32,7 +34,12 @@ therefore tests the packed output instead of the source tree:
   : "\${MYTOOL_ROOT:=\${BASHPACK_DIST:-\$BATS_TEST_DIRNAME/..}}"
 
 Run bare (bats test) it still tests the source; run via bashpack -t it tests
-what would actually ship. Tests themselves are never copied into the dist.
+what would actually ship.
+
+--single-bundle additionally inlines every lib and the first bin into a single
+runnable <outFolder>/<name>.sh with no archive and no extraction step, so it
+costs nothing at runtime. It can only carry bash — completions and vendored
+test runners still ship as separate files in the dist.
 
 Libs are not declared in bashpack.json — if the repo has a package.sh
 (basher's manifest format), its LIBS=(...) array is read automatically and
@@ -131,6 +138,56 @@ bashpack_vendor_dep() {
   fi
 
   BP_DEP_DIR="$dir"
+}
+
+# Drops `source`/`.` lines, and any for-loop that exists only to source a glob
+# of files, since everything they would have pulled in is inlined already.
+bashpack_strip_sources() {
+  awk '
+    /^[[:space:]]*(source|\.)[[:space:]]/ { next }
+    /^[[:space:]]*#!/ { next }
+    /^[A-Za-z_][A-Za-z0-9_]*_ROOT=/ { next }
+    /^[[:space:]]*for[[:space:]]/ && !infor { infor = 1; buf = $0; had = 0; next }
+    infor {
+      buf = buf "\n" $0
+      if ($0 ~ /^[[:space:]]*(source|\.)[[:space:]]/) had = 1
+      if ($0 ~ /^[[:space:]]*done[[:space:]]*$/) {
+        infor = 0
+        if (!had) print buf
+      }
+      next
+    }
+    { print }
+  ' "$1"
+}
+
+# Concatenates every lib and the bin into one runnable file. No archive and no
+# extraction, so it costs nothing at runtime — but it can only carry bash, not
+# completions or vendored trees.
+bashpack_build_bundle() {
+  local src="$1" dist="$2" name="$3" bin="$4"
+  shift 4
+  local libs=("$@")
+
+  local out="$dist/$name.sh"
+  local var
+  var="$(printf '%s' "$name" | tr '[:lower:]-' '[:upper:]_')_ROOT"
+
+  {
+    echo '#!/usr/bin/env bash'
+    echo 'set -uo pipefail'
+    echo "$var=\"\$(cd \"\$(dirname \"\$(readlink -f \"\$0\")\")\" && pwd)\""
+
+    local f
+    for f in "${libs[@]}" "$bin"; do
+      echo
+      echo "# --- $f ---"
+      bashpack_strip_sources "$src/$f"
+    done
+  } >"$out"
+
+  chmod +x "$out"
+  echo "$out"
 }
 
 bashpack_build_dist() {
@@ -244,6 +301,13 @@ bashpack_pack() {
   fi
 
   echo "built $name -> $BP_DIST"
+
+  if [[ -n "${BP_BUNDLE:-}" ]]; then
+    local bundle
+    bundle="$(bashpack_build_bundle "$src" "$BP_DIST" "$name" "${bins[0]}" "${libs[@]}")"
+    [[ ${#bins[@]} -gt 1 ]] && bashpack_warn "--single-bundle used ${bins[0]}; other bins were not bundled"
+    echo "bundled $name -> $bundle"
+  fi
 }
 
 bashpack_install_local() {
@@ -339,6 +403,7 @@ bashpack_list() {
 bashpack_main() {
   local action="" arg=""
   BASHPACK_QUIET=""
+  BP_BUNDLE=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -375,6 +440,15 @@ bashpack_main() {
       action="list"
       shift
       ;;
+    --single-bundle)
+      BP_BUNDLE=1
+      shift
+      if [[ -z "$action" && $# -gt 0 && "$1" != -* ]]; then
+        action="build"
+        arg="$1"
+        shift
+      fi
+      ;;
     -q | --quiet)
       BASHPACK_QUIET=1
       shift
@@ -389,6 +463,10 @@ bashpack_main() {
   install)
     bashpack_require_jq
     bashpack_install_local "$arg"
+    ;;
+  build)
+    bashpack_require_jq
+    bashpack_pack "$arg"
     ;;
   test)
     bashpack_require_jq
