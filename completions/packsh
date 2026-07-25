@@ -1,4 +1,4 @@
-_bashpack_bash_completion() {
+_packsh_bash_completion() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   local prev="${COMP_WORDS[COMP_CWORD-1]}"
 
@@ -18,4 +18,4 @@ _bashpack_bash_completion() {
   fi
 }
 
-complete -F _bashpack_bash_completion bashpack
+complete -F _packsh_bash_completion packsh

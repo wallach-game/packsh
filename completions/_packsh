@@ -1,6 +1,6 @@
-#compdef bashpack
+#compdef packsh
 
-_bashpack() {
+_packsh() {
   local curcontext="$curcontext" state line ret=1
   typeset -A opt_args
 
@@ -19,4 +19,4 @@ _bashpack() {
   return ret
 }
 
-_bashpack "$@"
+_packsh "$@"

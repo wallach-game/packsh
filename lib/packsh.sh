@@ -1,15 +1,15 @@
-bashpack_usage() {
+packsh_usage() {
   cat <<EOF
-Usage: bashpack -l <path/to/repo>   Install a package from a local directory
-       bashpack -t <path/to/repo>   Build and run that package's test suite
-       bashpack --single-bundle <path/to/repo>
+Usage: packsh -l <path/to/repo>   Install a package from a local directory
+       packsh -t <path/to/repo>   Build and run that package's test suite
+       packsh --single-bundle <path/to/repo>
                                    Build, and also emit a single runnable .sh
-       bashpack -u <name>          Uninstall a previously installed package
-       bashpack --list             List installed packages
-       bashpack -v, --version      Show version
-       bashpack -h, --help         Show this help
+       packsh -u <name>          Uninstall a previously installed package
+       packsh --list             List installed packages
+       packsh -v, --version      Show version
+       packsh -h, --help         Show this help
 
-Configuration is read from a bashpack.json file in the repo root:
+Configuration is read from a packsh.json file in the repo root:
 
   {
     "name": "mytool",
@@ -28,12 +28,12 @@ Configuration is read from a bashpack.json file in the repo root:
 exactly what gets packaged.
 
 -t builds that same dist and then runs the "test" command from the repo root
-with BASHPACK_DIST set to the dist path. A suite that honours BASHPACK_DIST
+with PACKSH_DIST set to the dist path. A suite that honours PACKSH_DIST
 therefore tests the packed output instead of the source tree:
 
-  : "\${MYTOOL_ROOT:=\${BASHPACK_DIST:-\$BATS_TEST_DIRNAME/..}}"
+  : "\${MYTOOL_ROOT:=\${PACKSH_DIST:-\$BATS_TEST_DIRNAME/..}}"
 
-Run bare (bats test) it still tests the source; run via bashpack -t it tests
+Run bare (bats test) it still tests the source; run via packsh -t it tests
 what would actually ship.
 
 --single-bundle additionally inlines every lib and the first bin into a single
@@ -41,45 +41,45 @@ runnable <outFolder>/<name>.sh with no archive and no extraction step, so it
 costs nothing at runtime. It can only carry bash — completions and vendored
 test runners still ship as separate files in the dist.
 
-Libs are not declared in bashpack.json — if the repo has a package.sh
+Libs are not declared in packsh.json — if the repo has a package.sh
 (basher's manifest format), its LIBS=(...) array is read automatically and
 those files are included in the build too, so the list isn't duplicated in
 two places.
 
-That dist folder is then copied into \$BASHPACK_HOME/cellar/<name> (default:
-~/.bashpack) and its bins/completions symlinked into \$BASHPACK_HOME/bin.
+That dist folder is then copied into \$PACKSH_HOME/cellar/<name> (default:
+~/.packsh) and its bins/completions symlinked into \$PACKSH_HOME/bin.
 Add that directory to your PATH to run installed commands.
 
 Requires jq.
 
-Remote installs (bashpack user/repo) are not supported yet — local only.
+Remote installs (packsh user/repo) are not supported yet — local only.
 EOF
 }
 
-bashpack_die() {
-  [[ -z "${BASHPACK_QUIET:-}" ]] && echo "bashpack: $*" >&2
+packsh_die() {
+  [[ -z "${PACKSH_QUIET:-}" ]] && echo "packsh: $*" >&2
   exit 1
 }
 
-bashpack_warn() {
-  [[ -z "${BASHPACK_QUIET:-}" ]] && echo "bashpack: $*" >&2
+packsh_warn() {
+  [[ -z "${PACKSH_QUIET:-}" ]] && echo "packsh: $*" >&2
 }
 
-bashpack_version() {
+packsh_version() {
   local ver="dev"
-  [[ -f "$BASHPACK_ROOT/VERSION" ]] && ver="$(<"$BASHPACK_ROOT/VERSION")"
-  echo "bashpack v${ver#v}"
+  [[ -f "$PACKSH_ROOT/VERSION" ]] && ver="$(<"$PACKSH_ROOT/VERSION")"
+  echo "packsh v${ver#v}"
 }
 
-bashpack_require_jq() {
-  command -v jq &>/dev/null || bashpack_die "jq is required but not installed (see your package manager)"
+packsh_require_jq() {
+  command -v jq &>/dev/null || packsh_die "jq is required but not installed (see your package manager)"
 }
 
-bashpack_home() {
-  echo "${BASHPACK_HOME:-$HOME/.bashpack}"
+packsh_home() {
+  echo "${PACKSH_HOME:-$HOME/.packsh}"
 }
 
-bashpack_read_package_sh_libs() {
+packsh_read_package_sh_libs() {
   local src="$1"
   local pkgsh="$src/package.sh"
   [[ -f "$pkgsh" ]] || return 0
@@ -92,7 +92,7 @@ bashpack_read_package_sh_libs() {
   )
 }
 
-bashpack_read_package_sh_deps() {
+packsh_read_package_sh_deps() {
   local src="$1"
   local pkgsh="$src/package.sh"
   [[ -f "$pkgsh" ]] || return 0
@@ -105,44 +105,44 @@ bashpack_read_package_sh_deps() {
   )
 }
 
-# Resolves a dependency to a directory on disk, setting BP_DEP_DIR.
+# Resolves a dependency to a directory on disk, setting PS_DEP_DIR.
 #
 # A local path (/foo, ./foo, ../foo, ~/foo) is used in place, as-is — handy for
 # developing against a checkout you're editing. A bare user/repo always uses the
-# downloaded copy, fetched into a shared cache under $BASHPACK_HOME/vendor and
+# downloaded copy, fetched into a shared cache under $PACKSH_HOME/vendor and
 # reused on later builds.
-bashpack_vendor_dep() {
+packsh_vendor_dep() {
   local dep="$1"
   local dir
 
   case "$dep" in
   /* | ./* | ../* | '~/'*)
     dir="${dep/#\~/$HOME}"
-    dir="$(cd "$dir" 2>/dev/null && pwd)" || bashpack_die "local dep not found: $dep"
-    BP_DEP_DIR="$dir"
+    dir="$(cd "$dir" 2>/dev/null && pwd)" || packsh_die "local dep not found: $dep"
+    PS_DEP_DIR="$dir"
     return 0
     ;;
   esac
 
   local cache
-  cache="$(bashpack_home)/vendor"
+  cache="$(packsh_home)/vendor"
   dir="$cache/${dep##*/}"
 
   if [[ ! -d "$dir" ]]; then
-    command -v git &>/dev/null || bashpack_die "git is required to fetch $dep"
+    command -v git &>/dev/null || packsh_die "git is required to fetch $dep"
     echo "fetching $dep"
     mkdir -p "$cache"
     rm -rf "$dir"
     git clone --depth 1 --quiet "https://github.com/$dep.git" "$dir" ||
-      bashpack_die "failed to fetch $dep from github.com/$dep"
+      packsh_die "failed to fetch $dep from github.com/$dep"
   fi
 
-  BP_DEP_DIR="$dir"
+  PS_DEP_DIR="$dir"
 }
 
 # Drops `source`/`.` lines, and any for-loop that exists only to source a glob
 # of files, since everything they would have pulled in is inlined already.
-bashpack_strip_sources() {
+packsh_strip_sources() {
   awk '
     /^[[:space:]]*(source|\.)[[:space:]]/ { next }
     /^[[:space:]]*#!/ { next }
@@ -164,7 +164,7 @@ bashpack_strip_sources() {
 # Concatenates every lib and the bin into one runnable file. No archive and no
 # extraction, so it costs nothing at runtime — but it can only carry bash, not
 # completions or vendored trees.
-bashpack_build_bundle() {
+packsh_build_bundle() {
   local src="$1" dist="$2" name="$3" bin="$4"
   shift 4
   local libs=("$@")
@@ -182,7 +182,7 @@ bashpack_build_bundle() {
     for f in "${libs[@]}" "$bin"; do
       echo
       echo "# --- $f ---"
-      bashpack_strip_sources "$src/$f"
+      packsh_strip_sources "$src/$f"
     done
   } >"$out"
 
@@ -190,7 +190,7 @@ bashpack_build_bundle() {
   echo "$out"
 }
 
-bashpack_build_dist() {
+packsh_build_dist() {
   local src="$1" manifest="$2" name="$3" out="$4"
   shift 4
   local files=("$@")
@@ -205,7 +205,7 @@ bashpack_build_dist() {
     cp -a "$src/$f" "$dist/$f"
   done
 
-  cp -a "$manifest" "$dist/bashpack.json"
+  cp -a "$manifest" "$dist/packsh.json"
 
   # TODO: hardcoded for now — should come from the manifest, and the runner
   # (package.sh DEPS) should be fetched and vendored alongside it.
@@ -215,20 +215,20 @@ bashpack_build_dist() {
 }
 
 # Validates the manifest and builds <repo>/<outFolder>. Results are left in the
-# BP_* globals so both install and test can work off the same build.
-bashpack_pack() {
+# PS_* globals so both install and test can work off the same build.
+packsh_pack() {
   local src="$1"
 
-  src="$(cd "$src" 2>/dev/null && pwd)" || bashpack_die "no such directory: $1"
+  src="$(cd "$src" 2>/dev/null && pwd)" || packsh_die "no such directory: $1"
 
-  local manifest="$src/bashpack.json"
-  [[ -f "$manifest" ]] || bashpack_die "no bashpack.json found in $src"
+  local manifest="$src/packsh.json"
+  [[ -f "$manifest" ]] || packsh_die "no packsh.json found in $src"
 
-  jq empty "$manifest" 2>/dev/null || bashpack_die "invalid JSON in $manifest"
+  jq empty "$manifest" 2>/dev/null || packsh_die "invalid JSON in $manifest"
 
   local name
   name="$(jq -r '.name // empty' "$manifest")"
-  [[ -n "$name" ]] || bashpack_die "bashpack.json missing required \"name\" field"
+  [[ -n "$name" ]] || packsh_die "packsh.json missing required \"name\" field"
 
   local bins=()
   local line
@@ -236,20 +236,20 @@ bashpack_pack() {
     [[ -n "$line" ]] && bins+=("$line")
   done < <(jq -r '.bins // [] | .[]' "$manifest")
 
-  [[ ${#bins[@]} -gt 0 ]] || bashpack_die "bashpack.json for \"$name\" declares no bins"
+  [[ ${#bins[@]} -gt 0 ]] || packsh_die "packsh.json for \"$name\" declares no bins"
 
   local b
   for b in "${bins[@]}"; do
-    [[ -f "$src/$b" ]] || bashpack_die "declared bin not found: $b"
+    [[ -f "$src/$b" ]] || packsh_die "declared bin not found: $b"
   done
 
   local libs=()
   while IFS= read -r line; do
     [[ -n "$line" ]] && libs+=("$line")
-  done < <(bashpack_read_package_sh_libs "$src")
+  done < <(packsh_read_package_sh_libs "$src")
 
   for b in "${libs[@]}"; do
-    [[ -f "$src/$b" ]] || bashpack_die "lib declared in package.sh not found: $b"
+    [[ -f "$src/$b" ]] || packsh_die "lib declared in package.sh not found: $b"
   done
 
   local completion_bash completion_zsh
@@ -257,11 +257,11 @@ bashpack_pack() {
   completion_zsh="$(jq -r '.completions.zsh // empty' "$manifest")"
 
   if [[ -n "$completion_bash" && ! -f "$src/$completion_bash" ]]; then
-    bashpack_warn "declared bash completion not found: $completion_bash"
+    packsh_warn "declared bash completion not found: $completion_bash"
     completion_bash=""
   fi
   if [[ -n "$completion_zsh" && ! -f "$src/$completion_zsh" ]]; then
-    bashpack_warn "declared zsh completion not found: $completion_zsh"
+    packsh_warn "declared zsh completion not found: $completion_zsh"
     completion_zsh=""
   fi
 
@@ -270,7 +270,7 @@ bashpack_pack() {
 
   case "$out" in
   "" | /* | *..*)
-    bashpack_die "invalid \"outFolder\" path in bashpack.json: ${out:-<empty>}"
+    packsh_die "invalid \"outFolder\" path in packsh.json: ${out:-<empty>}"
     ;;
   esac
 
@@ -278,50 +278,50 @@ bashpack_pack() {
   [[ -n "$completion_bash" ]] && dist_files+=("$completion_bash")
   [[ -n "$completion_zsh" ]] && dist_files+=("$completion_zsh")
 
-  BP_SRC="$src"
-  BP_MANIFEST="$manifest"
-  BP_NAME="$name"
-  BP_BINS=("${bins[@]}")
-  BP_COMPLETION_BASH="$completion_bash"
-  BP_COMPLETION_ZSH="$completion_zsh"
-  BP_DIST="$(bashpack_build_dist "$src" "$manifest" "$name" "$out" "${dist_files[@]}")"
+  PS_SRC="$src"
+  PS_MANIFEST="$manifest"
+  PS_NAME="$name"
+  PS_BINS=("${bins[@]}")
+  PS_COMPLETION_BASH="$completion_bash"
+  PS_COMPLETION_ZSH="$completion_zsh"
+  PS_DIST="$(packsh_build_dist "$src" "$manifest" "$name" "$out" "${dist_files[@]}")"
 
   # If the tests shipped, the runner has to ship with them or the dist can't
   # actually test itself. Runners come from package.sh DEPS.
-  if [[ -d "$BP_DIST/test" ]]; then
+  if [[ -d "$PS_DIST/test" ]]; then
     local dep depname
-    for dep in $(bashpack_read_package_sh_deps "$src"); do
-      bashpack_vendor_dep "$dep"
+    for dep in $(packsh_read_package_sh_deps "$src"); do
+      packsh_vendor_dep "$dep"
       depname="${dep##*/}"
-      mkdir -p "$BP_DIST/vendor"
-      rm -rf "$BP_DIST/vendor/$depname"
-      cp -a "$BP_DEP_DIR" "$BP_DIST/vendor/$depname"
-      rm -rf "$BP_DIST/vendor/$depname/.git"
+      mkdir -p "$PS_DIST/vendor"
+      rm -rf "$PS_DIST/vendor/$depname"
+      cp -a "$PS_DEP_DIR" "$PS_DIST/vendor/$depname"
+      rm -rf "$PS_DIST/vendor/$depname/.git"
     done
   fi
 
-  echo "built $name -> $BP_DIST"
+  echo "built $name -> $PS_DIST"
 
-  if [[ -n "${BP_BUNDLE:-}" ]]; then
+  if [[ -n "${PS_BUNDLE:-}" ]]; then
     local bundle
-    bundle="$(bashpack_build_bundle "$src" "$BP_DIST" "$name" "${bins[0]}" "${libs[@]}")"
-    [[ ${#bins[@]} -gt 1 ]] && bashpack_warn "--single-bundle used ${bins[0]}; other bins were not bundled"
+    bundle="$(packsh_build_bundle "$src" "$PS_DIST" "$name" "${bins[0]}" "${libs[@]}")"
+    [[ ${#bins[@]} -gt 1 ]] && packsh_warn "--single-bundle used ${bins[0]}; other bins were not bundled"
     echo "bundled $name -> $bundle"
   fi
 }
 
-bashpack_install_local() {
-  bashpack_pack "$1"
+packsh_install_local() {
+  packsh_pack "$1"
 
-  local name="$BP_NAME"
-  local bins=("${BP_BINS[@]}")
-  local completion_bash="$BP_COMPLETION_BASH"
-  local completion_zsh="$BP_COMPLETION_ZSH"
-  local dist="$BP_DIST"
+  local name="$PS_NAME"
+  local bins=("${PS_BINS[@]}")
+  local completion_bash="$PS_COMPLETION_BASH"
+  local completion_zsh="$PS_COMPLETION_ZSH"
+  local dist="$PS_DIST"
   local b
 
   local home
-  home="$(bashpack_home)"
+  home="$(packsh_home)"
   mkdir -p "$home/cellar" "$home/bin" "$home/completions/bash" "$home/completions/zsh"
 
   rm -rf "$home/cellar/$name"
@@ -346,34 +346,34 @@ bashpack_install_local() {
 
 # Runs the package's own test suite against the built dist rather than against
 # the source tree, so what gets tested is what gets shipped. The suite is told
-# where to look via BASHPACK_DIST.
-bashpack_test() {
-  bashpack_pack "$1"
+# where to look via PACKSH_DIST.
+packsh_test() {
+  packsh_pack "$1"
 
   local cmd
-  cmd="$(jq -r '.test // empty' "$BP_MANIFEST")"
-  [[ -n "$cmd" ]] || bashpack_die "bashpack.json for \"$BP_NAME\" declares no \"test\" command"
+  cmd="$(jq -r '.test // empty' "$PS_MANIFEST")"
+  [[ -n "$cmd" ]] || packsh_die "packsh.json for \"$PS_NAME\" declares no \"test\" command"
 
   local runner="${cmd%% *}"
   if ! command -v "$runner" &>/dev/null; then
     local deps
-    deps="$(bashpack_read_package_sh_deps "$BP_SRC")"
-    bashpack_die "test runner not found on PATH: $runner${deps:+ (package.sh declares DEPS: $deps)}"
+    deps="$(packsh_read_package_sh_deps "$PS_SRC")"
+    packsh_die "test runner not found on PATH: $runner${deps:+ (package.sh declares DEPS: $deps)}"
   fi
 
-  echo "testing $BP_NAME against $BP_DIST"
+  echo "testing $PS_NAME against $PS_DIST"
   (
-    cd "$BP_SRC" || exit 1
-    BASHPACK_DIST="$BP_DIST" bash -c "$cmd"
+    cd "$PS_SRC" || exit 1
+    PACKSH_DIST="$PS_DIST" bash -c "$cmd"
   )
 }
 
-bashpack_uninstall() {
+packsh_uninstall() {
   local name="$1"
   local home
-  home="$(bashpack_home)"
+  home="$(packsh_home)"
 
-  [[ -e "$home/cellar/$name" ]] || bashpack_die "not installed: $name"
+  [[ -e "$home/cellar/$name" ]] || packsh_die "not installed: $name"
 
   local f target
   for f in "$home"/bin/*; do
@@ -388,9 +388,9 @@ bashpack_uninstall() {
   echo "uninstalled $name"
 }
 
-bashpack_list() {
+packsh_list() {
   local home
-  home="$(bashpack_home)"
+  home="$(packsh_home)"
   [[ -d "$home/cellar" ]] || return 0
 
   local d
@@ -400,19 +400,19 @@ bashpack_list() {
   done
 }
 
-bashpack_main() {
+packsh_main() {
   local action="" arg=""
-  BASHPACK_QUIET=""
-  BP_BUNDLE=""
+  PACKSH_QUIET=""
+  PS_BUNDLE=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
     -h | --help)
-      bashpack_usage
+      packsh_usage
       exit 0
       ;;
     -v | --version)
-      bashpack_version
+      packsh_version
       exit 0
       ;;
     -l | --local)
@@ -437,57 +437,57 @@ bashpack_main() {
       shift
       ;;
     --single-bundle)
-      BP_BUNDLE=1
+      PS_BUNDLE=1
       shift
       ;;
     -q | --quiet)
-      BASHPACK_QUIET=1
+      PACKSH_QUIET=1
       shift
       ;;
     *)
-      if [[ -z "$arg" ]] && [[ -n "$action" || -n "$BP_BUNDLE" ]]; then
+      if [[ -z "$arg" ]] && [[ -n "$action" || -n "$PS_BUNDLE" ]]; then
         arg="$1"
         shift
       else
-        bashpack_die "unsupported argument: $1 (only local installs via -l are supported right now)"
+        packsh_die "unsupported argument: $1 (only local installs via -l are supported right now)"
       fi
       ;;
     esac
   done
 
   # --single-bundle on its own just builds
-  [[ -z "$action" && -n "$BP_BUNDLE" && -n "$arg" ]] && action="build"
+  [[ -z "$action" && -n "$PS_BUNDLE" && -n "$arg" ]] && action="build"
 
   case "$action" in
   install | test | build)
-    [[ -n "$arg" ]] || bashpack_die "$action requires a path"
+    [[ -n "$arg" ]] || packsh_die "$action requires a path"
     ;;
   uninstall)
-    [[ -n "$arg" ]] || bashpack_die "-u requires a package name"
+    [[ -n "$arg" ]] || packsh_die "-u requires a package name"
     ;;
   esac
 
   case "$action" in
   install)
-    bashpack_require_jq
-    bashpack_install_local "$arg"
+    packsh_require_jq
+    packsh_install_local "$arg"
     ;;
   build)
-    bashpack_require_jq
-    bashpack_pack "$arg"
+    packsh_require_jq
+    packsh_pack "$arg"
     ;;
   test)
-    bashpack_require_jq
-    bashpack_test "$arg"
+    packsh_require_jq
+    packsh_test "$arg"
     ;;
   uninstall)
-    bashpack_uninstall "$arg"
+    packsh_uninstall "$arg"
     ;;
   list)
-    bashpack_list
+    packsh_list
     ;;
   *)
-    bashpack_usage >&2
+    packsh_usage >&2
     exit 1
     ;;
   esac
