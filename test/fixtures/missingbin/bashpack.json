@@ -1,0 +1,4 @@
+{
+  "name": "missingbin",
+  "bins": ["bin/nope"]
+}

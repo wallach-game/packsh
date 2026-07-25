@@ -1,0 +1,8 @@
+{
+  "name": "samplepkg",
+  "bins": ["bin/hello"],
+  "completions": {
+    "bash": "completions/hello",
+    "zsh": "completions/_hello"
+  }
+}

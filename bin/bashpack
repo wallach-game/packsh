@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+BASHPACK_ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+
+source "$BASHPACK_ROOT/lib/bashpack.sh"
+
+bashpack_main "$@"

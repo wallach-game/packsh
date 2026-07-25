@@ -1,0 +1,22 @@
+#compdef bashpack
+
+_bashpack() {
+  local curcontext="$curcontext" state line ret=1
+  typeset -A opt_args
+
+  _arguments -C \
+    '(-l --local)'{-l,--local}'[install a package from a local directory]:path:_files -/' \
+    '(-u --uninstall)'{-u,--uninstall}'[uninstall a package]:name: ' \
+    '--list[list installed packages]' \
+    '--version[show version]' \
+    '-v[version]' \
+    '--quiet[suppress errors]' \
+    '-q[suppress errors]' \
+    '--help[show help]' \
+    '-h[show help]' \
+    && ret=0
+
+  return ret
+}
+
+_bashpack "$@"

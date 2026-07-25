@@ -1,0 +1,4 @@
+{
+  "name": "libpkg",
+  "bins": ["bin/greet"]
+}

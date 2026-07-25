@@ -1,0 +1,9 @@
+{
+  "name": "bashpack",
+  "bins": ["bin/bashpack"],
+  "outFolder": "dist",
+  "completions": {
+    "bash": "completions/bashpack",
+    "zsh": "completions/_bashpack"
+  }
+}
