@@ -416,25 +416,21 @@ bashpack_main() {
       exit 0
       ;;
     -l | --local)
-      shift
-      [[ $# -gt 0 ]] || bashpack_die "-l requires a path"
       action="install"
-      arg="$1"
       shift
+      # only take a value here if it isn't another flag, so the operand can
+      # just as well come later on the line
+      [[ $# -gt 0 && "$1" != -* ]] && { arg="$1"; shift; }
       ;;
     -test | -t | --test)
-      shift
-      [[ $# -gt 0 ]] || bashpack_die "-t requires a path"
       action="test"
-      arg="$1"
       shift
+      [[ $# -gt 0 && "$1" != -* ]] && { arg="$1"; shift; }
       ;;
     -u | --uninstall)
-      shift
-      [[ $# -gt 0 ]] || bashpack_die "-u requires a package name"
       action="uninstall"
-      arg="$1"
       shift
+      [[ $# -gt 0 && "$1" != -* ]] && { arg="$1"; shift; }
       ;;
     --list)
       action="list"
@@ -443,21 +439,33 @@ bashpack_main() {
     --single-bundle)
       BP_BUNDLE=1
       shift
-      if [[ -z "$action" && $# -gt 0 && "$1" != -* ]]; then
-        action="build"
-        arg="$1"
-        shift
-      fi
       ;;
     -q | --quiet)
       BASHPACK_QUIET=1
       shift
       ;;
     *)
-      bashpack_die "unsupported argument: $1 (only local installs via -l are supported right now)"
+      if [[ -z "$arg" ]] && [[ -n "$action" || -n "$BP_BUNDLE" ]]; then
+        arg="$1"
+        shift
+      else
+        bashpack_die "unsupported argument: $1 (only local installs via -l are supported right now)"
+      fi
       ;;
     esac
   done
+
+  # --single-bundle on its own just builds
+  [[ -z "$action" && -n "$BP_BUNDLE" && -n "$arg" ]] && action="build"
+
+  case "$action" in
+  install | test | build)
+    [[ -n "$arg" ]] || bashpack_die "$action requires a path"
+    ;;
+  uninstall)
+    [[ -n "$arg" ]] || bashpack_die "-u requires a package name"
+    ;;
+  esac
 
   case "$action" in
   install)
