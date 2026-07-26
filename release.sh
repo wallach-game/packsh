@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Release script for packsh
+# Release script for bundlesh
 # Usage: ./release.sh <major|minor|small|hotfix>
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 VERSION_FILE="$ROOT/VERSION"
-LIB="$ROOT/lib/packsh.sh"
+LIB="$ROOT/lib/bundlesh.sh"
 
 if [[ $# -ne 1 ]]; then
   echo "Usage: $0 <major|minor|small|hotfix>" >&2
@@ -79,7 +79,7 @@ gh release create "v$new_ver" \
   --notes "## v$new_ver
 
 **Release date:** $(date -u '+%Y-%m-%d %H:%M UTC')
-**SHA256:** \`$(git archive "v$new_ver" --prefix="packsh-v$new_ver/" | sha256sum | awk '{print $1}')\`" \
+**SHA256:** \`$(git archive "v$new_ver" --prefix="bundlesh-v$new_ver/" | sha256sum | awk '{print $1}')\`" \
   --target master
 
-echo "Done: https://github.com/wallach-game/packsh/releases/tag/v$new_ver"
+echo "Done: https://github.com/wallach-game/bundlesh/releases/tag/v$new_ver"

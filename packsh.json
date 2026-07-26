@@ -1,9 +1,0 @@
-{
-  "name": "packsh",
-  "bins": ["bin/packsh"],
-  "outFolder": "dist",
-  "completions": {
-    "bash": "completions/packsh",
-    "zsh": "completions/_packsh"
-  }
-}

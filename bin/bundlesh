@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -uo pipefail
+
+BUNDLESH_ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+
+source "$BUNDLESH_ROOT/lib/bundlesh.sh"
+
+bundlesh_main "$@"

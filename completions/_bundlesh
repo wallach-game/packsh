@@ -1,6 +1,6 @@
-#compdef packsh
+#compdef bundlesh
 
-_packsh() {
+_bundlesh() {
   local curcontext="$curcontext" state line ret=1
   typeset -A opt_args
 
@@ -19,4 +19,4 @@ _packsh() {
   return ret
 }
 
-_packsh "$@"
+_bundlesh "$@"

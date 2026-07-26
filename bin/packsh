@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -uo pipefail
-
-PACKSH_ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
-
-source "$PACKSH_ROOT/lib/packsh.sh"
-
-packsh_main "$@"

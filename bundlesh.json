@@ -1,0 +1,10 @@
+{
+  "name": "bundlesh",
+  "bins": ["bin/bundlesh"],
+  "outFolder": "dist",
+  "completions": {
+    "bash": "completions/bundlesh",
+    "zsh": "completions/_bundlesh"
+  },
+  "devdeps": []
+}
